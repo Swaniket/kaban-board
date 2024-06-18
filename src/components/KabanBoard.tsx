@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import PlusIcon from "../icons/PlusIcon";
-import { TColumn, TId } from "../types";
+import { TColumn, TId, TTask } from "../types";
 import ColumnContainer from "./ColumnContainer";
 import {
   DndContext,
@@ -16,6 +16,7 @@ import { createPortal } from "react-dom";
 
 function KabanBoard() {
   const [columns, setColumn] = useState<TColumn[]>([]);
+  const [tasks, setTasks] = useState<TTask[]>([])
   const [activeDragColumn, setActiveDragColumn] = useState<TColumn | null>(
     null
   );
@@ -86,6 +87,20 @@ function KabanBoard() {
     });
   };
 
+  const createTask = (id: TId) => {
+    const newTask: TTask = {
+      id: generateId(),
+      columnId: id,
+      content: `Task ${tasks.length + 1}`
+    }
+    setTasks([...tasks, newTask])
+  }
+
+  const deleteTask = (id: TId) => {
+    const filteredTasks = tasks.filter((task) => task.id !== id)
+    setTasks(filteredTasks)
+  }
+
   return (
     <div className="m-auto flex min-h-screen w-full items-center overflow-x-auto overflow-y-hidden px-[40px]">
       <DndContext
@@ -102,6 +117,9 @@ function KabanBoard() {
                   column={column}
                   deleteColumn={deleteColumn}
                   updateColumn={updateColumn}
+                  createTask={createTask}
+                  tasks={tasks.filter((task) => task.columnId === column.id)}
+                  deleteTask={deleteTask}
                 />
               ))}
             </SortableContext>
@@ -121,6 +139,9 @@ function KabanBoard() {
                 column={activeDragColumn}
                 deleteColumn={deleteColumn}
                 updateColumn={updateColumn}
+                createTask={createTask}
+                tasks={null}
+                deleteTask={deleteTask}
               />
             )}
           </DragOverlay>,
