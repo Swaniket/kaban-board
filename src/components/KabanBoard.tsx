@@ -5,6 +5,7 @@ import ColumnContainer from "./ColumnContainer";
 import {
   DndContext,
   DragEndEvent,
+  DragOverEvent,
   DragOverlay,
   DragStartEvent,
   PointerSensor,
@@ -13,13 +14,15 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove } from "@dnd-kit/sortable";
 import { createPortal } from "react-dom";
+import TaskCard from "./TaskCard";
 
 function KabanBoard() {
   const [columns, setColumn] = useState<TColumn[]>([]);
-  const [tasks, setTasks] = useState<TTask[]>([])
+  const [tasks, setTasks] = useState<TTask[]>([]);
   const [activeDragColumn, setActiveDragColumn] = useState<TColumn | null>(
     null
   );
+  const [activeTask, setActiveTask] = useState<TTask | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -48,6 +51,9 @@ function KabanBoard() {
   const deleteColumn = (id: TId) => {
     const filteredColumns = columns.filter((col) => col.id !== id);
     setColumn(filteredColumns);
+
+    const newTasks = tasks.filter((task) => task.columnId !== id);
+    setTasks(newTasks);
   };
 
   const updateColumn = (id: TId, title: string) => {
@@ -63,9 +69,17 @@ function KabanBoard() {
       setActiveDragColumn(e.active.data.current?.column);
       return;
     }
+
+    if (e.active.data.current?.type === "Task") {
+      setActiveTask(e.active.data.current?.task);
+      return;
+    }
   };
 
   const onDragEnd = (e: DragEndEvent) => {
+    setActiveDragColumn(null);
+    setActiveTask(null);
+
     const { active, over } = e;
     if (!over) return;
 
@@ -87,25 +101,72 @@ function KabanBoard() {
     });
   };
 
+  const onDragOver = (e: DragOverEvent) => {
+    const { active, over } = e;
+    if (!over) return;
+    if (!activeTask) return;
+
+    const activeColumnId = active.id;
+    const overColumnId = over.id;
+
+    if (activeColumnId === overColumnId) return;
+
+    const isActiveATask = active.data.current?.type === "Task";
+    const isOverATask = over.data.current?.type === "Task";
+
+    // 1. Dropping a task over another task
+    if (isActiveATask && isOverATask) {
+      setTasks((tasks) => {
+        const activeIndex = tasks.findIndex((t) => t.id === activeColumnId);
+        const overIndex = tasks.findIndex((t) => t.id === overColumnId);
+
+        tasks[activeIndex].columnId = tasks[overIndex].columnId;
+
+        return arrayMove(tasks, activeIndex, overIndex);
+      });
+    }
+
+    const isOverAColumn = over.data.current?.type === "Column";
+    // 2. Dropping task over another column
+    if (isActiveATask && isOverAColumn) {
+      setTasks((tasks) => {
+        const activeIndex = tasks.findIndex((t) => t.id === activeColumnId);
+
+        tasks[activeIndex].columnId = overColumnId;
+
+        return arrayMove(tasks, activeIndex, activeIndex);
+      });
+    }
+  };
+
   const createTask = (id: TId) => {
     const newTask: TTask = {
       id: generateId(),
       columnId: id,
-      content: `Task ${tasks.length + 1}`
-    }
-    setTasks([...tasks, newTask])
-  }
+      content: `Task ${tasks.length + 1}`,
+    };
+    setTasks([...tasks, newTask]);
+  };
 
   const deleteTask = (id: TId) => {
-    const filteredTasks = tasks.filter((task) => task.id !== id)
-    setTasks(filteredTasks)
-  }
+    const filteredTasks = tasks.filter((task) => task.id !== id);
+    setTasks(filteredTasks);
+  };
+
+  const updateTask = (taskId: TId, value: string) => {
+    const newTasks = tasks.map((task) => {
+      if (task.id !== taskId) return task;
+      return { ...task, content: value };
+    });
+    setTasks(newTasks);
+  };
 
   return (
     <div className="m-auto flex min-h-screen w-full items-center overflow-x-auto overflow-y-hidden px-[40px]">
       <DndContext
         onDragStart={onDragStart}
         onDragEnd={onDragEnd}
+        onDragOver={onDragOver}
         sensors={sensors}
       >
         <div className="m-auto flex gap-4">
@@ -120,6 +181,7 @@ function KabanBoard() {
                   createTask={createTask}
                   tasks={tasks.filter((task) => task.columnId === column.id)}
                   deleteTask={deleteTask}
+                  updateTask={updateTask}
                 />
               ))}
             </SortableContext>
@@ -140,8 +202,18 @@ function KabanBoard() {
                 deleteColumn={deleteColumn}
                 updateColumn={updateColumn}
                 createTask={createTask}
-                tasks={null}
+                tasks={tasks.filter(
+                  (task) => task.columnId === activeDragColumn.id
+                )}
                 deleteTask={deleteTask}
+                updateTask={updateTask}
+              />
+            )}
+            {activeTask && (
+              <TaskCard
+                task={activeTask}
+                deleteTask={deleteTask}
+                updateTask={updateTask}
               />
             )}
           </DragOverlay>,
